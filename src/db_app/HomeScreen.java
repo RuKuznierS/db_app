@@ -9,6 +9,8 @@ import java.io.IOException;
 import javax.swing.JTree;
 import javax.swing.*;
 import java.sql.*;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.table.DefaultTableModel;
@@ -16,83 +18,89 @@ import javax.swing.table.TableModel;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
+
 /**
  *
  * @author Matheus Cruz e Rudinei Kuznier
- * 
+ *
  */
-public class home_screen extends javax.swing.JFrame {
+public class HomeScreen extends javax.swing.JFrame {
 
     /**
-     * Creates new form home_screen
+     * Creates new form HomeScreen
      */
-    
     DefaultTreeModel model;
     String nodeData;
-    
-    public home_screen() {
+
+    public HomeScreen() {
         initComponents();
         this.setExtendedState(JFrame.MAXIMIZED_BOTH); //janela maximizada
         DefaultMutableTreeNode databases = new DefaultMutableTreeNode("Databases"); //inicia o nó raiz
         loadDataJTree(databases);
     }
-    
-    private void loadDataJTree(DefaultMutableTreeNode root){
+
+    private void loadDataJTree(DefaultMutableTreeNode root) {
         try (Connection connection = DatabaseConnection.getConnection("")) {
-            
             DatabaseMetaData metaData = connection.getMetaData();
             ResultSet databases = metaData.getCatalogs();
-            
+
             while (databases.next()) {
+                String databaseName = databases.getString(1);
+                DefaultMutableTreeNode databaseNode = new DefaultMutableTreeNode(databaseName);
+                root.add(databaseNode);
 
-                   String databaseName = databases.getString(1);
-                   DefaultMutableTreeNode databaseNode = new DefaultMutableTreeNode(databaseName);
-                   root.add(databaseNode);
+                try (Connection dbConnection = DatabaseConnection.getConnection(databaseName)) {
+                    DatabaseMetaData dbMetaData = dbConnection.getMetaData();
+                    ResultSet tables = dbMetaData.getTables(databaseName, null, "%", new String[]{"TABLE"});
 
-                   //tenta realizar a conexão
-                   try (Connection dbConnection = DatabaseConnection.getConnection(databaseName)) { //recebe as tabelas para listar
-                       DatabaseMetaData dbMetaData = dbConnection.getMetaData();
-                       ResultSet tables = dbMetaData.getTables(databaseName, null, "%", new String[]{"TABLE"});
-                        while (tables.next()) {
-                           String tableName = tables.getString("TABLE_NAME");
-                           DefaultMutableTreeNode tableNode = new DefaultMutableTreeNode(tableName);
-                           databaseNode.add(tableNode);
-                           
-                           ResultSet columns = dbMetaData.getColumns(databaseName, null, tableName, "%");
-                            while (columns.next()) {
-                               String columnName = columns.getString("COLUMN_NAME");
-                               String columnType = columns.getString("TYPE_NAME");
-                               int columnSize = columns.getInt("COLUMN_SIZE");
-                               String columnDetail = columnName + " - " + columnType + " (" + columnSize + ")";
-                               DefaultMutableTreeNode columnNode = new DefaultMutableTreeNode(columnDetail);
-                               tableNode.add(columnNode);
-                            }
+                    while (tables.next()) {
+                        String tableName = tables.getString("TABLE_NAME");
+                        DefaultMutableTreeNode tableNode = new DefaultMutableTreeNode(tableName);
+                        databaseNode.add(tableNode);
+
+                        // Get primary keys for the table
+                        ResultSet pk = dbMetaData.getPrimaryKeys(null, null, tableName);
+                        Set<String> primaryKeys = new HashSet<>();
+                        while (pk.next()) {
+                            primaryKeys.add(pk.getString("COLUMN_NAME"));
                         }
-                   }
+
+                        // Get columns details
+                        ResultSet columns = dbMetaData.getColumns(null, null, tableName, null);
+                        while (columns.next()) {
+                            String columnName = columns.getString("COLUMN_NAME");
+                            String columnType = columns.getString("TYPE_NAME");
+                            int columnSize = columns.getInt("COLUMN_SIZE");
+                            String columnDetail = columnName + " - " + columnType + " (" + columnSize + ")";
+                            if (primaryKeys.contains(columnName)) {
+                                columnDetail += " [PK]";
+                            }
+                            DefaultMutableTreeNode columnNode = new DefaultMutableTreeNode(columnDetail);
+                            tableNode.add(columnNode);
+                        }
+                    }
+                }
             }
-        model = (DefaultTreeModel) jTree2.getModel();
-        
-        model.setRoot(root);    
-        
-        jTree2.setModel(model);
-        
-        }   catch (SQLException ex) {
+            model = (DefaultTreeModel) jTree2.getModel();
+            model.setRoot(root);
+            jTree2.setModel(model);
+        } catch (SQLException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Erro ao conectar ao banco de dados: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
-        
         model.reload(); //notifica alteracao da estrutura
+
     }
-    
+
     //Carrega a tabela a partir dos SELECT realizados
-    private void loadData( String queryData, String databaseNameData, int rowsNumber){
-        
-          String query = queryData.toLowerCase(); //seta a query para letras minusculas
-          String databaseName = databaseNameData;
-          int flagRow = 0; //contador para definir a quantidade de linhas a visualizar
-          
-          //teste para quando o usuario utilizar o comando "use"
-          /*
+    private void loadData(String queryData, String databaseNameData, int rowsNumber) {
+
+        String query = queryData.toLowerCase(); //seta a query para letras minusculas
+        String databaseName = databaseNameData;
+        int flagRow = 0; //contador para definir a quantidade de linhas a visualizar
+
+        //teste para quando o usuario utilizar o comando "use"
+        /*
           if (queryData.startsWith("use"))
           {
               
@@ -104,11 +112,8 @@ public class home_screen extends javax.swing.JFrame {
           {
               databaseName = databaseNameData;
           }
-          */
-          
-          try (Connection conn = DatabaseConnection.getConnection(databaseName);
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+         */
+        try (Connection conn = DatabaseConnection.getConnection(databaseName); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(query)) {
 
             ResultSetMetaData metaData = rs.getMetaData();
             int columnCount = metaData.getColumnCount();
@@ -118,10 +123,10 @@ public class home_screen extends javax.swing.JFrame {
                 columnNames[i - 1] = metaData.getColumnName(i);
             }
 
-            DefaultTableModel  model = new DefaultTableModel(columnNames, 0);
+            DefaultTableModel model = new DefaultTableModel(columnNames, 0);
 
             //preenchimento da JTable
-            while (rs.next() && flagRow < rowsNumber) { 
+            while (rs.next() && flagRow < rowsNumber) {
                 Object[] row = new Object[columnCount];
                 for (int i = 1; i <= columnCount; i++) {
                     row[i - 1] = rs.getObject(i);
@@ -136,16 +141,14 @@ public class home_screen extends javax.swing.JFrame {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Erro ao conectar ao banco de dados: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
-          
-    }  
-    
+
+    }
+
     //Carrega os dados das tabelas específicas queando o usuário dá dois clicks na tabela
-    private void loadDataFromSpecificTable( String tableName, String databaseName){
-         String query = "SELECT * FROM " + tableName;
-         
-          try (Connection conn = DatabaseConnection.getConnection(databaseName);
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+    private void loadDataFromSpecificTable(String tableName, String databaseName) {
+        String query = "SELECT * FROM " + tableName;
+
+        try (Connection conn = DatabaseConnection.getConnection(databaseName); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(query)) {
 
             ResultSetMetaData metaData = rs.getMetaData();
             int columnCount = metaData.getColumnCount();
@@ -155,7 +158,7 @@ public class home_screen extends javax.swing.JFrame {
                 columnNames[i - 1] = metaData.getColumnName(i);
             }
 
-            DefaultTableModel  model = new DefaultTableModel(columnNames, 0);
+            DefaultTableModel model = new DefaultTableModel(columnNames, 0);
 
             while (rs.next()) {
                 Object[] row = new Object[columnCount];
@@ -172,9 +175,8 @@ public class home_screen extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Erro ao conectar ao banco de dados: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
 
-          
-
     }
+
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -367,35 +369,31 @@ public class home_screen extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-
     //Evento para abrir as tabelas do banco ///
     private void jTree2MouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_jTree2MouseClicked
         //Evento acionado com 2 clicks do mouse
-        if (evt.getClickCount() == 2)
-        {
+        if (evt.getClickCount() == 2) {
             TreePath path = jTree2.getPathForLocation(evt.getX(), evt.getY()); //caminho clicado
-            if (path != null)
-            {
+            if (path != null) {
                 DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent(); //nó selecionado
                 // Verificando se o nó é uma pasta
-                if (node.getAllowsChildren())
-                {
+                if (node.getAllowsChildren()) {
                     DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent();
-                  
-                    if (!("Databases".equals(parent.toString())))
-                    {
-                               JOptionPane.showMessageDialog(this, "Você clicou duas vezes na pasta: " + node.getUserObject() + "\nPasta pai: " + parent.getUserObject());
-                              
-                              // loadDataFromSpecificTable(node.getUserObject().toString(), parent.getUserObject().toString());
+
+                    if (!("Databases".equals(parent.toString()))) {
+                        TableViewScreen Tscreen = new TableViewScreen(parent.getUserObject().toString(), node.getUserObject().toString());
+                        Tscreen.setVisible(true);
+                        // loadDataFromSpecificTable(node.getUserObject().toString(), parent.getUserObject().toString());
                     }
-                            
+
                 }
             }
         }
+
     }//GEN-LAST:event_jTree2MouseClicked
 
     //Método para exportar tabelas CSV
-    public static void exportCSV(JTable table, String path) throws IOException{
+    public static void exportCSV(JTable table, String path) throws IOException {
         TableModel model = table.getModel();
         FileWriter csv = new FileWriter(path);
 
@@ -415,7 +413,7 @@ public class home_screen extends javax.swing.JFrame {
 
         csv.close();
     }
-     
+
     //botao exportar consulta
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         try {
@@ -424,12 +422,12 @@ public class home_screen extends javax.swing.JFrame {
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "Erro ao exportar dados: " + ex);
         }
-        
-        
+
+
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
-        String numRowsToShowStr =  (String) jComboBox1.getSelectedItem();
+        String numRowsToShowStr = (String) jComboBox1.getSelectedItem();
         int numRowsToShow = Integer.parseInt(numRowsToShowStr); //converte valor da comboBox
         loadData(jTextArea1.getText(), nodeData, numRowsToShow); //executa o preenchimento da JTable com a quantidade de linhas escolhida
     }//GEN-LAST:event_jButton2ActionPerformed
@@ -439,25 +437,24 @@ public class home_screen extends javax.swing.JFrame {
         if (SwingUtilities.isRightMouseButton(evt)) {
             TreePath path = jTree2.getPathForLocation(evt.getX(), evt.getY()); //caminho clicado
 
-            if (path != null)
-            {
+            if (path != null) {
                 DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent(); //nó selecionado
 
                 // Verificando se o nó é uma pasta
-                if (node.getAllowsChildren())
-                {
+                if (node.getAllowsChildren()) {
                     DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent();
 
                     //Verifica se o caminho clicado é um banco pertencente a Pasta Databases
                     nodeData = ((DefaultMutableTreeNode) node).getUserObject().toString();
-                    
-                    int choice = JOptionPane.showConfirmDialog(this,"Deseja utilizar o banco: " + node + "?","Confirmação",JOptionPane.YES_NO_OPTION);
-                    
-                        //Verifica se o usuário aceitou utilizar o banco selecionado.
-                        if (choice == JOptionPane.YES_OPTION)
-                            jLabel2.setText(nodeData); 
-                        else
-                            jLabel2.setText("");                             
+
+                    int choice = JOptionPane.showConfirmDialog(this, "Deseja utilizar o banco: " + node + "?", "Confirmação", JOptionPane.YES_NO_OPTION);
+
+                    //Verifica se o usuário aceitou utilizar o banco selecionado.
+                    if (choice == JOptionPane.YES_OPTION) {
+                        jLabel2.setText(nodeData);
+                    } else {
+                        jLabel2.setText("");
+                    }
                 }
             }
         }
@@ -466,16 +463,16 @@ public class home_screen extends javax.swing.JFrame {
     //Evento de atualização dos dados a partir da comboBox
     private void jComboBox1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jComboBox1ActionPerformed
         // TODO add your handling code here:
-         String numRowsToShowStr =  (String) jComboBox1.getSelectedItem();
-         int numRowsToShow = Integer.parseInt(numRowsToShowStr);
-         loadData(jTextArea1.getText(), nodeData, numRowsToShow); 
-         
+        String numRowsToShowStr = (String) jComboBox1.getSelectedItem();
+        int numRowsToShow = Integer.parseInt(numRowsToShowStr);
+        loadData(jTextArea1.getText(), nodeData, numRowsToShow);
+
     }//GEN-LAST:event_jComboBox1ActionPerformed
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]){
+    public static void main(String args[]) {
         /* Set the Nimbus look and feel */
         //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
         /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
@@ -489,20 +486,20 @@ public class home_screen extends javax.swing.JFrame {
                 }
             }
         } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(home_screen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(HomeScreen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(home_screen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(HomeScreen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(home_screen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(HomeScreen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(home_screen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(HomeScreen.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
         //</editor-fold>
- // Configurar o tema escuro do JTattoo
-           // UIManager.setLookAndFeel(new AcrylLookAndFeel());
+        // Configurar o tema escuro do JTattoo
+        // UIManager.setLookAndFeel(new AcrylLookAndFeel());
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(() -> {
-            new home_screen().setVisible(true);
+            new HomeScreen().setVisible(true);
         });
     }
 
