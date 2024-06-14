@@ -392,36 +392,12 @@ public class HomeScreen extends javax.swing.JFrame {
 
     }//GEN-LAST:event_jTree2MouseClicked
 
-    //Método para exportar tabelas CSV
-    public static void exportCSV(JTable table, String path) throws IOException {
-        TableModel model = table.getModel();
-        FileWriter csv = new FileWriter(path);
-
-        // Escreve cabeçalhos
-        for (int i = 0; i < model.getColumnCount(); i++) {
-            csv.write(model.getColumnName(i) + ",");
-        }
-        csv.write("\n");
-
-        // Escreve dados
-        for (int i = 0; i < model.getRowCount(); i++) {
-            for (int j = 0; j < model.getColumnCount(); j++) {
-                csv.write(model.getValueAt(i, j).toString() + ",");
-            }
-            csv.write("\n");
-        }
-
-        csv.close();
-    }
+    
 
     //botao exportar consulta
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        try {
-            exportCSV(jTable1, "dados.csv");
-            JOptionPane.showMessageDialog(this, "Dados exportados com sucesso!");
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(this, "Erro ao exportar dados: " + ex);
-        }
+        SaveScreen svs = new SaveScreen(jTable1);
+        svs.setVisible(true);
 
 
     }//GEN-LAST:event_jButton1ActionPerformed

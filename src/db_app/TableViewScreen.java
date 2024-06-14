@@ -26,6 +26,7 @@ public class TableViewScreen extends javax.swing.JFrame {
         setLocationRelativeTo(null);
         setDefaultCloseOperation(this.DISPOSE_ON_CLOSE);
         loadDataFromSpecificTable(tableName, databaseName);
+        setTitle(tableName);
     }
     
     private void loadDataFromSpecificTable(String tableName, String databaseName) {
@@ -75,6 +76,7 @@ public class TableViewScreen extends javax.swing.JFrame {
         jTable1 = new javax.swing.JTable();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setResizable(false);
 
         jTable1.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
@@ -120,6 +122,7 @@ public class TableViewScreen extends javax.swing.JFrame {
         );
 
         pack();
+        setLocationRelativeTo(null);
     }// </editor-fold>//GEN-END:initComponents
 
     /**

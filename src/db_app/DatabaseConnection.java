@@ -13,10 +13,18 @@ import java.sql.SQLException;
  * @author COGETI
  */
 public class DatabaseConnection {
-    private static final String URL = "jdbc:mysql://localhost:3306/";
-    private static final String USER = "root";
-    private static final String PASSWORD = "123";
+    private static String URL;
+    private static String USER;
+    private static String PASSWORD;
     
+    public DatabaseConnection(String server, String user, String password){
+        if (server.equals("mysql"))
+            URL = "jdbc:mysql://localhost:3306/";
+        if (server.equals("postgres"))
+            URL = "jdbc:postgresql://localhost:5432/";
+        USER = user;
+        PASSWORD = password;
+    }
     public static Connection getConnection(String dbName) throws SQLException {
         return DriverManager.getConnection(URL + dbName, USER, PASSWORD);
     }
